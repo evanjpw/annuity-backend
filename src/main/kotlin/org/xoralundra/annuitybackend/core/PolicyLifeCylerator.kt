@@ -21,8 +21,8 @@ class PolicyLifeCylerator(private val incomingPolicyEvents: MsgConsumer<String, 
                           private val policyStore: PolicyStore,
                           private val theClock: TheClock) {
 
-    fun processPolicies() {
-        while (true) {
+    fun processPolicies(exit: Boolean = false) {
+        while (!exit) {
             val events = incomingPolicyEvents.poll()
             for (event in events) {
                 val payouts = parseIncomingJSON(event.key, event.value)

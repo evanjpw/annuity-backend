@@ -16,6 +16,7 @@ repositories {
 
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
+    testCompile "org.jetbrains.kotlin:kotlin-test-junit"
     implementation 'com.beust:klaxon:5.0.1'
     // https://mvnrepository.com/artifact/org.apache.kafka/kafka
     //compile group: 'org.apache.kafka', name: 'kafka_2.10', version: '0.8.0'
