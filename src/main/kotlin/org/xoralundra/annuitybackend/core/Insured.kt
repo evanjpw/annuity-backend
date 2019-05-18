@@ -1,5 +1,6 @@
 package org.xoralundra.annuitybackend.core
 
+import mu.KotlinLogging
 import org.xoralundra.annuitybackend.mockapis.PolicyNumber
 import org.xoralundra.annuitybackend.mockapis.PolicyStore
 import java.time.ZonedDateTime
@@ -21,7 +22,7 @@ data class Address(
 
 typealias TIN = String
 
-data class Death(val dateDeceased: java.time.ZonedDateTime, val insuredTIN: TIN)
+data class Death(val date: java.time.ZonedDateTime, val insuredTIN: TIN)
 
 class Insured(
     val name: String,
@@ -29,28 +30,34 @@ class Insured(
     val phoneNumber: String,
     val dateOfBirth: Date,
     val taxpayerIdentificationNumber: String,
-    val policyNumbers: Array<PolicyNumber>
+    var policyNumbers: Array<PolicyNumber>
 ) {
+    val logger = KotlinLogging.logger {  }
     private var _dateOfDeath: ZonedDateTime? = null
     val isAlive get() = _dateOfDeath == null
     val dateOfDeath get() = _dateOfDeath
 
     fun died(deathDate: ZonedDateTime? = null): List<Payout> {
         _dateOfDeath = deathDate ?: ZonedDateTime.now()
+        logger.info { "In insured $taxpayerIdentificationNumber died. There are ${policies.size} policies" }
         return _policies.map { policy ->
+            logger.info {
+                "In insured died processing policy ${policy.policyNumber}"
+            }
             policy.ownerDied(_dateOfDeath!!)
         }
     }
 
+    private val _policies = ArrayList<Policy>()
+
     fun initPolicies(policyStore: PolicyStore) {
         for (policyNumber in policyNumbers) {
             val policy = policyStore.getPolicy(policyNumber)
-            if (policy != null) {
-                addPolicy(policy)
+            if (policy != null && policy !in _policies) {
+                _policies.add(policy) // yes this skips a verification
             }
         }
     }
-    private val _policies = ArrayList<Policy>()
 
     val policies: List<Policy> get() = _policies.toList()
 
@@ -58,6 +65,9 @@ class Insured(
         if (policy.insured != this) {
             throw WrongInsuredException()
         }
-        _policies.add(policy)
+        if (policy.policyNumber !in policyNumbers) {
+            policyNumbers =  policyNumbers.plusElement(policy.policyNumber)
+            _policies.add(policy)
+        }
     }
 }

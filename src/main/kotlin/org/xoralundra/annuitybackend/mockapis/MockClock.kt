@@ -24,5 +24,10 @@ object MockClock : TheClock {
         }
     }
 
+    fun reset() {
+        instant = null
+        zoneId = null
+    }
+
     override val now: ZonedDateTime get() = ZonedDateTime.now(clock)
 }

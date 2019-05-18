@@ -1,6 +1,7 @@
 package org.xoralundra.annuitybackend.core
 
 import com.beust.klaxon.*
+import mu.KotlinLogging
 import org.joda.money.CurrencyUnit
 import org.joda.money.Money
 import org.joda.money.MoneyUtils
@@ -30,6 +31,18 @@ class Application(val insured: Insured, val annuityInfo: AnnuityInfo, val id: St
     private var hasBankAccount: Boolean? = null
     private var hasFunds: Boolean? = null
     private var isSolidCitizen: Boolean? = null
+
+    fun verifiedBankAccount(verified: Boolean) {
+        hasBankAccount = verified
+    }
+
+    fun verifiedFunds(funds: Money) {
+        hasFunds = funds.isGreaterThan(annuityInfo.premium) || funds.isEqual(annuityInfo.premium)
+    }
+
+    fun verifiedIsNotMoneyLaunderer(verified: Boolean) {
+        isSolidCitizen = verified
+    }
 
     val applicationState: ApplicationState
         get() {
@@ -71,9 +84,12 @@ class Policy(
         // Policy state and start date will always be def values
     )
 
+    val logger = KotlinLogging.logger {  }
 
     private fun transitionTo(newState: PolicyState) {
-        if (!state.isTransitionValid(newState)) {
+        state = if (state.isTransitionValid(newState) || newState == PolicyState.RIP) {
+            newState
+        } else {
             throw InvalidPolicyTransition(
                 "For policy $policyNumber, can't transition from $state to $newState"
             )
@@ -86,20 +102,24 @@ class Policy(
         // For the time being, we will compound monthly. If there is time
         // we will try compounding daily  *
         if (fullMonth) {  // If we are compounding monthly do not pay interest on fractional months
-            balance += balance.multipliedBy(annuityInfo.monthlyInterest, RoundingMode.HALF_UP)
+            balance += balance.multipliedBy(annuityInfo.monthlyInterest / 100.0, RoundingMode.HALF_UP)
         }
     }
 
-    fun gotDeposit(dateAsOf: ZonedDateTime) {
+    fun gotDeposit(dateAsOf: ZonedDateTime, payment: Money = annuityInfo.premium) {
         startDate = dateAsOf
         if (mostRecentMonthiversary == null) {
             mostRecentMonthiversary = startDate
         }
         transitionTo(PolicyState.CANCELLABLE)
+        balance += payment
     }
 
     fun cancel(dateAsOf: ZonedDateTime): Payout {
-        recalculateBalance(dateAsOf)
+        val targetDate = nextMonthiversary
+        if (targetDate != null && dateAsOf.isAfter(targetDate)) {
+            recalculateBalance(dateAsOf)
+        }
         val oldState = state
         transitionTo(PolicyState.CANCELLED)
         if (oldState != PolicyState.CANCELLABLE) {
@@ -111,7 +131,12 @@ class Policy(
     fun ownerDied(dateAsOf: ZonedDateTime): Payout {
         val targetDate = nextMonthiversary
         recalculateBalance(dateAsOf, targetDate != null && dateAsOf.isAfter(targetDate))
-        transitionTo(PolicyState.RIP)
+        try {
+            transitionTo(PolicyState.RIP)
+        } catch (e: InvalidPolicyTransition) {
+            // For this circumstance we could cancel a policy that is already cancelled
+            logger.info(e) { "Skipping state transition error in ownerDied." }
+        }
         return Payout(balance, PayoutType.TO_BENEFICIARIES)
     }
 
@@ -133,4 +158,6 @@ class Policy(
         }
         return null
     }
+
+    val policyState get() = state
 }

@@ -17,14 +17,18 @@ open class PolicyStore {
 
     fun getInsured(tin: TIN): Insured? = insureds[tin]
 
-    fun saveInsured(insured: Insured) {
-        insureds[insured.taxpayerIdentificationNumber] = insured
+    fun saveInsured(insured: Insured?) {
+        if (insured != null) {
+            insureds[insured.taxpayerIdentificationNumber] = insured
+        }
     }
 
     fun getPolicy(policyNumber: PolicyNumber): Policy? = policies[policyNumber]
 
-    fun savePolicy(policy: Policy) {
-        policies[policy.policyNumber] = policy
+    fun savePolicy(policy: Policy?) {
+        if (policy != null) {
+            policies[policy.policyNumber] = policy
+        }
     }
 }
 
