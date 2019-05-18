@@ -35,9 +35,9 @@ class Insured(
     val isAlive get() = _dateOfDeath == null
     val dateOfDeath get() = _dateOfDeath
 
-    fun died(deathDate: ZonedDateTime? = null) {
+    fun died(deathDate: ZonedDateTime? = null): List<Payout> {
         _dateOfDeath = deathDate ?: ZonedDateTime.now()
-        for (policy in _policies) {
+        return _policies.map { policy ->
             policy.ownerDied(_dateOfDeath!!)
         }
     }

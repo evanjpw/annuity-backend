@@ -7,6 +7,11 @@ import java.time.Clock
 import java.time.ZonedDateTime
 
 fun main() {
+    val cyclerator = PolicyLifeCylerator(MockMsgQueues.PolicyEventConsumer,
+        MockMsgQueues.BankEventProducer,
+        ThePolicyStore,
+        MockClock)
+    cyclerator.processPolicies()
 }
 
 class UnapprovedApplicationException(s: String? = null) : Exception(s)
@@ -15,6 +20,18 @@ class PolicyLifeCylerator(private val incomingPolicyEvents: MsgConsumer<String, 
                           private val outgoingBankEvents: MsgProducer<String, String>,
                           private val policyStore: PolicyStore,
                           private val theClock: TheClock) {
+
+    fun processPolicies() {
+        while (true) {
+            val events = incomingPolicyEvents.poll()
+            for (event in events) {
+                val payouts = parseIncomingJSON(event.key, event.value)
+                payouts.forEach {
+                    outgoingBankEvents.send(it.payoutType.toString(), Klaxon().toJsonString(it))
+                }
+            }
+        }
+    }
 
 
 
@@ -28,15 +45,16 @@ class PolicyLifeCylerator(private val incomingPolicyEvents: MsgConsumer<String, 
         return Policy(application, now, _policyNumber)
     }
 
-    fun parseIncomingJSON(key: String, value: String) {
-        when (key) {
+    private fun parseIncomingJSON(key: String, value: String): List<Payout> {
+       return when (key) {
             "death" -> {
                 val death = Klaxon().parse<Death>(value)
                 if (death != null) {
                     val insured = policyStore.getInsured(death.insuredTIN)
                     insured?.initPolicies(policyStore)
-                    insured?.died(theClock.dateOrNow(death.dateDeceased))
-                }
+                    insured?.died(theClock.dateOrNow(death.dateDeceased)) ?: listOf()
+
+                } else listOf<Payout>()
             }
             "premium" -> {
                 val payment = Klaxon().parse<Payment>(value)
@@ -44,21 +62,25 @@ class PolicyLifeCylerator(private val incomingPolicyEvents: MsgConsumer<String, 
                     val policy = policyStore.getPolicy(payment.policyNumber)
                     policy?.gotDeposit(theClock.dateOrNow(payment.date))
                 }
+                listOf()
             }
             "cancel" -> {
                 val cancellation = Klaxon().parse<Cancellation>(value)
-                if (cancellation != null) {
+                val payout = if (cancellation != null) {
                     val policy = policyStore.getPolicy(cancellation.policyNumber)
                     policy?.cancel(theClock.dateOrNow(cancellation.date))
-                }
+                } else null
+                payout?.let { listOf(it) } ?: listOf()
             }
             "tick" -> {
                 val update = Klaxon().parse<PolicyUpdate>(value)
-                if (update != null) {
+                val payout = if (update != null) {
                     val policy = policyStore.getPolicy(update.policyNumber)
                     policy?.clockTick(theClock.dateOrNow(update.date))
-                }
+                } else null
+                payout?.let { listOf(it) } ?: listOf()
             }
+                else -> listOf()
         }
     }
 }
