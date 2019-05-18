@@ -1,6 +1,7 @@
 package org.xoralundra.annuitybackend.core
 
-import java.lang.IllegalArgumentException
+import org.xoralundra.annuitybackend.mockapis.PolicyNumber
+import org.xoralundra.annuitybackend.mockapis.PolicyStore
 import java.time.ZonedDateTime
 import java.util.*
 import kotlin.collections.ArrayList
@@ -18,15 +19,37 @@ data class Address(
     val countryCode: String
 )
 
-class Insured(val name: String, address: Address, val phoneNumber: String, val dateOfBirth: Date, taxpayerIdentificationNumber: String) {
+typealias TIN = String
+
+data class Death(val dateDeceased: java.time.ZonedDateTime, val insuredTIN: TIN)
+
+class Insured(
+    val name: String,
+    val address: Address,
+    val phoneNumber: String,
+    val dateOfBirth: Date,
+    val taxpayerIdentificationNumber: String,
+    val policyNumbers: Array<PolicyNumber>
+) {
     private var _dateOfDeath: ZonedDateTime? = null
     val isAlive get() = _dateOfDeath == null
     val dateOfDeath get() = _dateOfDeath
 
     fun died(deathDate: ZonedDateTime? = null) {
         _dateOfDeath = deathDate ?: ZonedDateTime.now()
+        for (policy in _policies) {
+            policy.ownerDied(_dateOfDeath!!)
+        }
     }
 
+    fun initPolicies(policyStore: PolicyStore) {
+        for (policyNumber in policyNumbers) {
+            val policy = policyStore.getPolicy(policyNumber)
+            if (policy != null) {
+                addPolicy(policy)
+            }
+        }
+    }
     private val _policies = ArrayList<Policy>()
 
     val policies: List<Policy> get() = _policies.toList()

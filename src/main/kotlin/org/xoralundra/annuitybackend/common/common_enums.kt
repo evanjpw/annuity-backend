@@ -23,3 +23,16 @@ enum class PolicyState(val decription: String) {
     }
 }
 
+enum class ApplicationState {
+    OK,
+    WAIT,
+    DISAPPROVE
+}
+
+
+enum class PayoutType {
+    PAYMENT,
+    REFUND,
+    TERM_COMPLETE,
+    TO_BENEFICIARIES
+}
